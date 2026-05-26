@@ -1,6 +1,0 @@
-streamlit
-paddleocr
-paddlepaddle
-opencv-python-headless
-pillow
-numpy
