@@ -1,0 +1,83 @@
+import streamlit as st
+from paddleocr import PaddleOCR
+from PIL import Image
+import numpy as np
+import cv2
+
+st.set_page_config(page_title="名字检测工具", page_icon="📝", layout="wide")
+
+st.title("📝 名字检测工具")
+st.markdown("上传图片，自动检测哪些名字已出现、哪些未出现")
+
+DEFAULT_NAMES = ["徐锐", "田芸", "王忠", "文芮", "徐荣", "徐晓彬", "郑静"]
+
+st.sidebar.header("⚙️ 设置")
+use_default = st.sidebar.checkbox("使用默认名字库", value=True)
+
+if use_default:
+    name_list = DEFAULT_NAMES
+else:
+    name_input = st.sidebar.text_area("请输入名字库（每行一个）", "\n".join(DEFAULT_NAMES))
+    name_list = [n.strip() for n in name_input.split("\n") if n.strip()]
+
+st.sidebar.caption(f"当前名字库共 **{len(name_list)}** 人")
+
+uploaded_file = st.file_uploader("选择图片", type=["jpg", "jpeg", "png", "bmp", "tiff"])
+
+@st.cache_resource
+def init_ocr():
+    return PaddleOCR(use_angle_cls=True, lang='ch', det_db_thresh=0.3, show_log=False)
+
+if uploaded_file is not None:
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        image = Image.open(uploaded_file)
+        st.image(image, caption="上传的图片", use_container_width=True)
+    
+    if st.button("🔍 开始检测", type="primary"):
+        with st.spinner("正在识别图片中的文字，请稍候..."):
+            try:
+                ocr = init_ocr()
+                img_array = np.array(image)
+                gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+                binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+                result = ocr.ocr(binary)
+                
+                detected_texts = []
+                for line in result:
+                    if line:
+                        for word_info in line:
+                            text = word_info[1][0]
+                            confidence = word_info[1][1]
+                            detected_texts.append(text.strip())
+                            st.caption(f"识别到: {text} (置信度: {confidence:.2f})")
+                
+                appeared = []
+                missing = []
+                
+                for name in name_list:
+                    matched = False
+                    for detected in detected_texts:
+                        if name == detected or name in detected or detected in name:
+                            matched = True
+                            break
+                    if matched:
+                        appeared.append(name)
+                    else:
+                        missing.append(name)
+                
+                with col2:
+                    st.success(f"✅ 已出现的名字（{len(appeared)} 个）")
+                    for name in appeared:
+                        st.write(f"  - {name}")
+                    
+                    if missing:
+                        st.error(f"❌ 未出现的名字（{len(missing)} 个）")
+                        for name in missing:
+                            st.write(f"  - {name}")
+                    else:
+                        st.success("🎉 所有名字都已出现！")
+                        
+            except Exception as e:
+                st.error(f"识别失败：{str(e)}")
