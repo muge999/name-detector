@@ -1,8 +1,7 @@
 import streamlit as st
-from paddleocr import PaddleOCR
+import easyocr
 from PIL import Image
 import numpy as np
-import cv2
 
 st.set_page_config(page_title="名字检测工具", page_icon="📝", layout="wide")
 
@@ -26,7 +25,7 @@ uploaded_file = st.file_uploader("选择图片", type=["jpg", "jpeg", "png", "bm
 
 @st.cache_resource
 def init_ocr():
-    return PaddleOCR(use_angle_cls=True, lang='ch', det_db_thresh=0.3, show_log=False)
+    return easyocr.Reader(['ch_sim', 'en'])
 
 if uploaded_file is not None:
     col1, col2 = st.columns(2)
@@ -40,18 +39,12 @@ if uploaded_file is not None:
             try:
                 ocr = init_ocr()
                 img_array = np.array(image)
-                gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
-                binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
-                result = ocr.ocr(binary)
+                result = ocr.readtext(img_array)
                 
                 detected_texts = []
-                for line in result:
-                    if line:
-                        for word_info in line:
-                            text = word_info[1][0]
-                            confidence = word_info[1][1]
-                            detected_texts.append(text.strip())
-                            st.caption(f"识别到: {text} (置信度: {confidence:.2f})")
+                for (bbox, text, confidence) in result:
+                    detected_texts.append(text.strip())
+                    st.caption(f"识别到: {text} (置信度: {confidence:.2f})")
                 
                 appeared = []
                 missing = []
